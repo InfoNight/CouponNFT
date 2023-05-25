@@ -19,7 +19,7 @@ contract CouponNFT is KIP17MetadataMintable {
     constructor() KIP17("CouponNFT", "CPN") { }
 
     /**
-     * Issue new coupon called by stores
+     * Issue new coupon called by stores (생성 2)
      */
     function issueCoupon(address recipient, string memory couponCode, string memory tokenURI)
         public
@@ -40,7 +40,7 @@ contract CouponNFT is KIP17MetadataMintable {
     }
 
     /**
-     * Claim coupon called by user
+     * Claim coupon called by user (생성 4)
      */
     function claimCoupon(string memory couponCode)
         public
@@ -58,7 +58,7 @@ contract CouponNFT is KIP17MetadataMintable {
     }
 
     /**
-     * Use coupons called by user
+     * Use coupons called by user (사용 3)
      */
     function useCoupon(address recipient, uint256[] memory couponIds)
         public
@@ -67,7 +67,7 @@ contract CouponNFT is KIP17MetadataMintable {
     }
 
     /**
-     * Validation of coupons called by store
+     * Validation of coupons called by store (사용 4 - 공급자자 유저가 보낸 쿠폰 확인 용도)
      */
     function getCouponURIs(address user)
         public view
@@ -86,7 +86,7 @@ contract CouponNFT is KIP17MetadataMintable {
     }
 
     /**
-     * Burn used coupons
+     * Burn used coupons (사용 5)
      */
     function consumeCoupons(address user)
         public
