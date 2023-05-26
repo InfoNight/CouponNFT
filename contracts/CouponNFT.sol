@@ -5,8 +5,18 @@ import "@klaytn/contracts/KIP/token/KIP17/extensions/KIP17MetadataMintable.sol";
 import "@klaytn/contracts/utils/Counters.sol";
 
 contract CouponNFT is KIP17MetadataMintable {
+
+    event UseCoupon(address indexed sender, address indexed recipient, uint256[] couponIds);
+
+    event GetCouponURIs(address indexed sender);
+
     using Counters for Counters.Counter;
     Counters.Counter private _tokenIds;
+
+    struct UserRequests {
+        address user;
+        uint256[] couponIds;
+    }
 
     // Mapping for Coupon issuing codes (String code -> user address -> tokenId)
     mapping(string => mapping(address => uint256)) private _couponCodes;
@@ -14,7 +24,9 @@ contract CouponNFT is KIP17MetadataMintable {
     // Recipient for new coupons
     mapping(uint256 => address) private _senderAddress;
 
-    mapping(address => mapping(address => uint256[])) private _pendingCoupons;
+    // mapping(address => address[]) private _requestingUsers;
+
+    mapping(address => UserRequests[]) private _pendingCoupons;
 
     constructor() KIP17("CouponNFT", "CPN") { }
 
@@ -32,7 +44,9 @@ contract CouponNFT is KIP17MetadataMintable {
         _safeMint(msg.sender, newItemId);
         _setTokenURI(newItemId, tokenURI);
 
-        approve(recipient, newItemId);
+        if (!_isApprovedOrOwner(recipient, newItemId)) {
+            approve(recipient, newItemId);
+        }
 
         _couponCodes[couponCode][recipient] = newItemId;
         _senderAddress[newItemId] = msg.sender;
@@ -63,27 +77,60 @@ contract CouponNFT is KIP17MetadataMintable {
      */
     function useCoupon(address recipient, uint256[] memory couponIds)
         public
+        // returns (bool)
     {
-        _pendingCoupons[recipient][msg.sender] = couponIds;
+        for (uint i = 0; i < couponIds.length; i++) {
+            require(msg.sender == ownerOf(couponIds[i]), "CouponNFT: transferring unowned coupons");
+            // if (msg.sender != ownerOf(couponIds[i])) {
+            //     return false;
+            // }
+        }
+        _pendingCoupons[recipient].push(UserRequests(msg.sender, couponIds));
+
+        // for (uint i = 0; i < couponIds.length; i++) {
+        //     _requestingUsers[recipient].push(msg.sender);
+        // }
+        // _pendingCoupons[recipient][msg.sender] = couponIds;
+
+        emit UseCoupon(msg.sender, recipient, couponIds);
+        // return true;
     }
 
     /**
      * Validation of coupons called by store (사용 4 - 공급자자 유저가 보낸 쿠폰 확인 용도)
      */
-    function getCouponURIs(address user)
+    function getCoupons()
         public view
-        returns (string[] memory)
+        returns (address[] memory)
     {
-        uint256[] memory couponIds = _pendingCoupons[msg.sender][user];
-        // delete _pendingCoupons[msg.sender][user];
+        // address[] memory userIds = _requestingUsers[msg.sender];
+        // string[] memory couponURIs;
 
-        string[] memory couponURIs;
+        // for (uint i = 0; i < userIds.length; i++) {
+        //     uint256[] memory couponIds = _pendingCoupons[msg.sender][userIds[i]];
 
-        for (uint i = 0; i < couponIds.length; i++) {
-            couponURIs[i] = tokenURI(couponIds[i]);
-        }
+        //     for (uint j = 0; j < couponIds.length; j++) {
+        //         couponURIs[i] = tokenURI(couponIds[i]);
+        //     }
+        // }
 
-        return couponURIs;
+        // UserRequests[] memory userRequests = _pendingCoupons[msg.sender];
+        address[] memory userIds;
+        // string[] memory couponURIs;
+
+        // for (uint i = 0; i < userRequests.length; i++) {
+        //     for (uint j = 0; j < userRequests[i].couponIds.length; j++) {
+        //         userIds[i] = userRequests[i].user;
+        //         // couponURIs[i] = tokenURI(userRequests[i].couponIds[j]);
+        //     }
+        // }
+
+        // emit GetCouponURIs(msg.sender);
+
+        // userIds[0] = msg.sender;   // POINT OF ERROR
+        // couponURIs[0] = "6";
+
+        return userIds;
     }
 
     /**
@@ -91,12 +138,29 @@ contract CouponNFT is KIP17MetadataMintable {
      */
     function consumeCoupons(address user)
         public
+        returns (bool)
     {
-        uint256[] memory couponIds = _pendingCoupons[msg.sender][user];
-        delete _pendingCoupons[msg.sender][user];
+        UserRequests[] storage userRequests = _pendingCoupons[msg.sender];
+        for (uint i = 0; i < userRequests.length; i++) {
+            if (userRequests[i].user == user) {
+                for (uint j = 0; j < userRequests[i].couponIds.length; j++) {
+                    _burn(userRequests[i].couponIds[j]);
+                }
+                userRequests[i] = userRequests[userRequests.length - 1];
+                userRequests.pop();
 
-        for (uint i = 0; i < couponIds.length; i++) {
-            _burn(couponIds[i]);
+                _pendingCoupons[msg.sender] = userRequests;
+
+                return true;
+            }
         }
+        // delete _requestingUsers[msg.sender]
+        // delete _pendingCoupons[msg.sender][user];
+
+        // for (uint i = 0; i < couponIds.length; i++) {
+        //     _burn(couponIds[i]);
+        // }
+
+        return false;
     }
 }
