@@ -8,8 +8,8 @@ contract CouponNFT is KIP17MetadataMintable {
     using Counters for Counters.Counter;
     Counters.Counter private _tokenIds;
 
-    // Mapping for Coupon issuing codes (String code -> tokenId)
-    mapping(string => uint256) private _couponCodes;
+    // Mapping for Coupon issuing codes (String code -> user address -> tokenId)
+    mapping(string => mapping(address => uint256)) private _couponCodes;
 
     // Recipient for new coupons
     mapping(uint256 => address) private _senderAddress;
@@ -34,7 +34,7 @@ contract CouponNFT is KIP17MetadataMintable {
 
         approve(recipient, newItemId);
 
-        _couponCodes[couponCode] = newItemId;
+        _couponCodes[couponCode][recipient] = newItemId;
         _senderAddress[newItemId] = msg.sender;
 
         return newItemId;
@@ -47,10 +47,10 @@ contract CouponNFT is KIP17MetadataMintable {
         public
         returns (uint256)
     {
-        uint256 tokenId = _couponCodes[couponCode];
+        uint256 tokenId = _couponCodes[couponCode][msg.sender];
         address sender = _senderAddress[tokenId];
 
-        delete _couponCodes[couponCode];
+        delete _couponCodes[couponCode][msg.sender];
         delete _senderAddress[tokenId];
         
         transferFrom(sender, msg.sender, tokenId);
