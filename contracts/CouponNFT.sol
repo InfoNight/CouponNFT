@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.0;
 
-import "@klaytn/contracts/KIP/token/KIP17/extensions/KIP17MetadataMintable.sol";
+import "@klaytn/contracts/KIP/token/KIP17/extensions/KIP17URIStorage.sol";
 import "@klaytn/contracts/utils/Counters.sol";
 
-contract CouponNFT is KIP17MetadataMintable {
+contract CouponNFT is KIP17URIStorage {
     using Counters for Counters.Counter;
     Counters.Counter private _tokenIds;
 
@@ -29,13 +29,15 @@ contract CouponNFT is KIP17MetadataMintable {
 
         uint256 newItemId = _tokenIds.current();
 
-        mintWithTokenURI(msg.sender, newItemId, tokenURI);
+        // mintWithTokenURI(msg.sender, newItemId, tokenURI);
+        _safeMint(msg.sender, newItemId);
+        _setTokenURI(newItemId, tokenURI);
 
         approve(recipient, newItemId);
 
         _couponCodes[couponCode] = newItemId;
         _senderAddress[newItemId] = msg.sender;
-
+        
         return newItemId;
     }
 
