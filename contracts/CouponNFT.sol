@@ -108,7 +108,7 @@ contract CouponNFT is KIP17URIStorage, KIP17Enumerable {
         returns (address[] memory, string[] memory)
     {
         UserRequest[] memory userRequests = _pendingCoupons[msg.sender];
-        uint256 requestCount = getCouponCount(userRequests);
+        uint256 requestCount = getPendingCount(userRequests);
 
         address[] memory userIds = new address[](requestCount);
         string[] memory couponURIs = new string[](requestCount);
@@ -127,7 +127,7 @@ contract CouponNFT is KIP17URIStorage, KIP17Enumerable {
         return (userIds, couponURIs);
     }
 
-    function getCouponCount(UserRequest[] memory userRequests)
+    function getPendingCount(UserRequest[] memory userRequests)
         internal pure
         returns (uint256)
     {
