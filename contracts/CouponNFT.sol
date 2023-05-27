@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.0;
 
-import "@klaytn/contracts/KIP/token/KIP17/extensions/KIP17MetadataMintable.sol";
+import "@klaytn/contracts/KIP/token/KIP17/extensions/KIP17URIStorage.sol";
+import "@klaytn/contracts/KIP/token/KIP17/extensions/KIP17Enumerable.sol";
 import "@klaytn/contracts/utils/Counters.sol";
 
-contract CouponNFT is KIP17MetadataMintable {
+contract CouponNFT is KIP17URIStorage, KIP17Enumerable {
 
     event UseCoupon(address indexed sender, address indexed recipient, uint256[] couponIds);
 
@@ -13,9 +14,10 @@ contract CouponNFT is KIP17MetadataMintable {
     using Counters for Counters.Counter;
     Counters.Counter private _tokenIds;
 
-    struct UserRequests {
+    struct UserRequest {
         address user;
         uint256[] couponIds;
+        uint256 couponCount;
     }
 
     // Mapping for Coupon issuing codes (String code -> user address -> tokenId)
@@ -26,14 +28,21 @@ contract CouponNFT is KIP17MetadataMintable {
 
     // mapping(address => address[]) private _requestingUsers;
 
-    mapping(address => UserRequests[]) private _pendingCoupons;
+    mapping(address => UserRequest[]) private _pendingCoupons;
 
     constructor() KIP17("CouponNFT", "CPN") { }
 
     /**
+     * @dev See {IKIP13-supportsInterface}.
+     */
+    function supportsInterface(bytes4 interfaceId) public view virtual override(KIP17, KIP17Enumerable) returns (bool) {
+        return KIP17Enumerable.supportsInterface(interfaceId);
+    }
+
+    /**
      * Issue new coupon called by stores (생성 2)
      */
-    function issueCoupon(address recipient, string memory couponCode, string memory tokenURI)
+    function issueCoupon(address recipient, string memory couponCode, string memory _tokenURI)
         public
         returns (uint256)
     {
@@ -42,7 +51,7 @@ contract CouponNFT is KIP17MetadataMintable {
         uint256 newItemId = _tokenIds.current();
 
         _safeMint(msg.sender, newItemId);
-        _setTokenURI(newItemId, tokenURI);
+        _setTokenURI(newItemId, _tokenURI);
 
         if (!_isApprovedOrOwner(recipient, newItemId)) {
             approve(recipient, newItemId);
@@ -77,15 +86,11 @@ contract CouponNFT is KIP17MetadataMintable {
      */
     function useCoupon(address recipient, uint256[] memory couponIds)
         public
-        // returns (bool)
     {
         for (uint i = 0; i < couponIds.length; i++) {
             require(msg.sender == ownerOf(couponIds[i]), "CouponNFT: transferring unowned coupons");
-            // if (msg.sender != ownerOf(couponIds[i])) {
-            //     return false;
-            // }
         }
-        _pendingCoupons[recipient].push(UserRequests(msg.sender, couponIds));
+        _pendingCoupons[recipient].push(UserRequest(msg.sender, couponIds, couponIds.length));
 
         // for (uint i = 0; i < couponIds.length; i++) {
         //     _requestingUsers[recipient].push(msg.sender);
@@ -93,44 +98,62 @@ contract CouponNFT is KIP17MetadataMintable {
         // _pendingCoupons[recipient][msg.sender] = couponIds;
 
         emit UseCoupon(msg.sender, recipient, couponIds);
-        // return true;
     }
 
     /**
      * Validation of coupons called by store (사용 4 - 공급자자 유저가 보낸 쿠폰 확인 용도)
      */
-    function getCoupons()
-        public view
-        returns (address[] memory)
+    function getPendingCoupons()
+        public
+        returns (address[] memory, string[] memory)
     {
-        // address[] memory userIds = _requestingUsers[msg.sender];
-        // string[] memory couponURIs;
+        UserRequest[] memory userRequests = _pendingCoupons[msg.sender];
+        uint256 requestCount = getCouponCount(userRequests);
 
-        // for (uint i = 0; i < userIds.length; i++) {
-        //     uint256[] memory couponIds = _pendingCoupons[msg.sender][userIds[i]];
+        address[] memory userIds = new address[](requestCount);
+        string[] memory couponURIs = new string[](requestCount);
 
-        //     for (uint j = 0; j < couponIds.length; j++) {
-        //         couponURIs[i] = tokenURI(couponIds[i]);
-        //     }
-        // }
+        uint256 index = 0;
+        for (uint i = 0; i < userRequests.length; i++) {
+            for (uint j = 0; j < userRequests[i].couponIds.length; j++) {
+                userIds[index] = userRequests[i].user;
+                couponURIs[index] = tokenURI(userRequests[i].couponIds[j]);
+                index++;
+            }
+        }
 
-        // UserRequests[] memory userRequests = _pendingCoupons[msg.sender];
-        address[] memory userIds;
-        // string[] memory couponURIs;
+        emit GetCouponURIs(msg.sender);
 
-        // for (uint i = 0; i < userRequests.length; i++) {
-        //     for (uint j = 0; j < userRequests[i].couponIds.length; j++) {
-        //         userIds[i] = userRequests[i].user;
-        //         // couponURIs[i] = tokenURI(userRequests[i].couponIds[j]);
-        //     }
-        // }
+        return (userIds, couponURIs);
+    }
 
-        // emit GetCouponURIs(msg.sender);
+    function getCouponCount(UserRequest[] memory userRequests)
+        internal pure
+        returns (uint256)
+    {
+        uint256 count = 0;
+        for (uint i = 0; i < userRequests.length; i++) {
+            count += userRequests[i].couponCount;
+        }
+        return count;
+    }
 
-        // userIds[0] = msg.sender;   // POINT OF ERROR
-        // couponURIs[0] = "6";
+    /**
+     * Returns NFT coupons 
+     */
+    function getUserCoupons()
+        public view
+        returns (uint256[] memory, string[] memory)
+    {
+        uint256 tokenCount = balanceOf(msg.sender);
+        uint256[] memory tokens = new uint256[](tokenCount);
+        string[] memory tokenURIs = new string[](tokenCount);
 
-        return userIds;
+        for (uint256 i = 0; i < tokenCount; i++) {
+            tokens[i] = tokenOfOwnerByIndex(msg.sender, i);
+            tokenURIs[i] = tokenURI(tokens[i]);
+        }
+        return (tokens, tokenURIs);
     }
 
     /**
@@ -140,7 +163,7 @@ contract CouponNFT is KIP17MetadataMintable {
         public
         returns (bool)
     {
-        UserRequests[] storage userRequests = _pendingCoupons[msg.sender];
+        UserRequest[] storage userRequests = _pendingCoupons[msg.sender];
         for (uint i = 0; i < userRequests.length; i++) {
             if (userRequests[i].user == user) {
                 for (uint j = 0; j < userRequests[i].couponIds.length; j++) {
@@ -162,5 +185,21 @@ contract CouponNFT is KIP17MetadataMintable {
         // }
 
         return false;
+    }
+
+    function tokenURI(uint256 tokenId) public view virtual override(KIP17, KIP17URIStorage) returns (string memory) {
+        return KIP17URIStorage.tokenURI(tokenId);
+    }
+
+    function _beforeTokenTransfer(
+        address from,
+        address to,
+        uint256 tokenId
+    ) internal virtual override(KIP17, KIP17Enumerable) {
+        KIP17Enumerable._beforeTokenTransfer(from, to, tokenId);
+    }
+
+    function _burn(uint256 tokenId) internal virtual override(KIP17, KIP17URIStorage) {
+        KIP17URIStorage._burn(tokenId);
     }
 }
