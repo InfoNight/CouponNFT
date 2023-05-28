@@ -7,9 +7,7 @@ import "@klaytn/contracts/utils/Counters.sol";
 
 contract CouponNFT is KIP17URIStorage, KIP17Enumerable {
 
-    event UseCoupon(address indexed sender, address indexed recipient, uint256[] couponIds);
-
-    event GetCouponURIs(address indexed sender);
+    event RedeemCoupon(address indexed sender, address indexed recipient, uint256[] couponIds);
 
     using Counters for Counters.Counter;
     Counters.Counter private _tokenIds;
@@ -26,8 +24,6 @@ contract CouponNFT is KIP17URIStorage, KIP17Enumerable {
     // Recipient for new coupons
     mapping(uint256 => address) private _senderAddress;
 
-    // mapping(address => address[]) private _requestingUsers;
-
     mapping(address => UserRequest[]) private _pendingCoupons;
 
     constructor() KIP17("CouponNFT", "CPN") { }
@@ -40,7 +36,7 @@ contract CouponNFT is KIP17URIStorage, KIP17Enumerable {
     }
 
     /**
-     * Issue new coupon called by stores (생성 2)
+     * Issue new coupon called by stores (Issue #2)
      */
     function issueCoupon(address recipient, string memory couponCode, string memory _tokenURI)
         public
@@ -64,7 +60,7 @@ contract CouponNFT is KIP17URIStorage, KIP17Enumerable {
     }
 
     /**
-     * Claim coupon called by user (생성 4)
+     * Claim coupon called by user (Issue #4)
      */
     function claimCoupon(string memory couponCode)
         public
@@ -82,9 +78,9 @@ contract CouponNFT is KIP17URIStorage, KIP17Enumerable {
     }
 
     /**
-     * Use coupons called by user (사용 3)
+     * Use coupons called by user (Redeem #3)
      */
-    function useCoupon(address recipient, uint256[] memory couponIds)
+    function redeemCoupon(address recipient, uint256[] memory couponIds)
         public
     {
         for (uint i = 0; i < couponIds.length; i++) {
@@ -92,19 +88,14 @@ contract CouponNFT is KIP17URIStorage, KIP17Enumerable {
         }
         _pendingCoupons[recipient].push(UserRequest(msg.sender, couponIds, couponIds.length));
 
-        // for (uint i = 0; i < couponIds.length; i++) {
-        //     _requestingUsers[recipient].push(msg.sender);
-        // }
-        // _pendingCoupons[recipient][msg.sender] = couponIds;
-
-        emit UseCoupon(msg.sender, recipient, couponIds);
+        emit RedeemCoupon(msg.sender, recipient, couponIds);
     }
 
     /**
-     * Validation of coupons called by store (사용 4 - 공급자자 유저가 보낸 쿠폰 확인 용도)
+     * Validation of coupons called by store (Redeem #4)
      */
     function getPendingCoupons()
-        public
+        public view
         returns (address[] memory, string[] memory)
     {
         UserRequest[] memory userRequests = _pendingCoupons[msg.sender];
@@ -121,8 +112,6 @@ contract CouponNFT is KIP17URIStorage, KIP17Enumerable {
                 index++;
             }
         }
-
-        emit GetCouponURIs(msg.sender);
 
         return (userIds, couponURIs);
     }
@@ -157,34 +146,25 @@ contract CouponNFT is KIP17URIStorage, KIP17Enumerable {
     }
 
     /**
-     * Burn used coupons (사용 5)
+     * Burn used coupons (Redeem #5)
      */
     function consumeCoupons(address user)
         public
-        returns (bool)
     {
         UserRequest[] storage userRequests = _pendingCoupons[msg.sender];
         for (uint i = 0; i < userRequests.length; i++) {
-            if (userRequests[i].user == user) {
-                for (uint j = 0; j < userRequests[i].couponIds.length; j++) {
-                    _burn(userRequests[i].couponIds[j]);
+            uint index = userRequests.length - i - 1;
+            if (userRequests[index].user == user) {
+                for (uint j = 0; j < userRequests[index].couponIds.length; j++) {
+                    _burn(userRequests[index].couponIds[j]);
                 }
-                userRequests[i] = userRequests[userRequests.length - 1];
+                if (index != userRequests.length - 1) {
+                    userRequests[index] = userRequests[userRequests.length - 1];
+                }
                 userRequests.pop();
-
-                _pendingCoupons[msg.sender] = userRequests;
-
-                return true;
             }
         }
-        // delete _requestingUsers[msg.sender]
-        // delete _pendingCoupons[msg.sender][user];
-
-        // for (uint i = 0; i < couponIds.length; i++) {
-        //     _burn(couponIds[i]);
-        // }
-
-        return false;
+        _pendingCoupons[msg.sender] = userRequests;
     }
 
     function tokenURI(uint256 tokenId) public view virtual override(KIP17, KIP17URIStorage) returns (string memory) {
